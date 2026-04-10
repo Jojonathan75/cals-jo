@@ -130,6 +130,32 @@ export default function App() {
     setAnalyzing(false);
   };
 
+  // AI text analysis
+  const analyzeText = async (text) => {
+    if (!text || text.length < 2) return;
+    setAnalyzing(true); setAnalyzeError(''); setDetectedFoods([]);
+    try {
+      const resp = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      const data = await resp.json();
+      if (data.error) { setAnalyzeError(data.error); }
+      else if (data.foods && data.foods.length > 0) {
+        setDetectedFoods(data.foods.map(f => ({
+          ...f, cal: Math.round(f.cal||0),
+          protein: Math.round((f.protein||0)*10)/10,
+          carbs: Math.round((f.carbs||0)*10)/10,
+          fat: Math.round((f.fat||0)*10)/10,
+          grams: Math.round(f.grams||100),
+          per: `${Math.round(f.grams||100)}g`
+        })));
+      } else { setAnalyzeError("Aucun aliment reconnu. Réessaie avec plus de détails."); }
+    } catch { setAnalyzeError("Erreur de connexion."); }
+    setAnalyzing(false);
+  };
+
   // Debounced search
   const handleSearchInput = useCallback((text) => {
     setManualInput(text);
@@ -156,26 +182,10 @@ export default function App() {
       setVoiceText(transcript);
       if (event.results[0].isFinal) {
         setIsListening(false);
-        // Search the transcript
-        const results = doFoodSearch(transcript);
-        if (results.length > 0) {
-          setSearchResults(results);
-          setManualInput(transcript);
-          setScanMode('manual');
-        } else {
-          // Try individual words
-          const words = transcript.split(/[\s,]+/);
-          let allResults = [];
-          words.forEach(w => { allResults = allResults.concat(doFoodSearch(w)); });
-          const unique = allResults.filter((v,i,a) => a.findIndex(x => x.name === v.name) === i);
-          if (unique.length > 0) {
-            setSearchResults(unique);
-            setManualInput(transcript);
-            setScanMode('manual');
-          } else {
-            setVoiceError(`Aucun aliment trouvé pour "${transcript}". Essaie le mode Manuel.`);
-          }
-        }
+        setManualInput(transcript);
+        // Use AI to analyze the spoken text
+        setScanMode('manual');
+        setTimeout(() => analyzeText(transcript), 100);
       }
     };
     recognition.onerror = (e) => {
@@ -357,13 +367,14 @@ export default function App() {
 
             {/* MANUAL */}
             {scanMode==='manual' && <>
-              <div style={{ position:'relative', marginBottom:12 }}>
+              <div style={{ position:'relative', marginBottom:8 }}>
                 <input
                   ref={inputRef}
                   key="manual-search-input"
-                  placeholder="Rechercher un aliment... (ex: poulet, riz)"
+                  placeholder="Décris ton repas... (ex: 300g pâtes bolo)"
                   value={manualInput}
                   onChange={e => handleSearchInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && manualInput.length >= 2) analyzeText(manualInput); }}
                   autoComplete="off" autoCorrect="off" spellCheck={false} autoCapitalize="off"
                   enterKeyHint="search"
                   style={{ width:'100%', padding:'14px 16px 14px 44px', background:T.white, border:`1.5px solid ${T.border}`, borderRadius:14, color:T.text, fontSize:16, outline:'none', boxSizing:'border-box', boxShadow:T.shadow, WebkitAppearance:'none' }}
@@ -371,49 +382,104 @@ export default function App() {
                 <span style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', fontSize:16, opacity:.35, pointerEvents:'none' }}>🔍</span>
               </div>
 
-              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                {searchResults.map((f, i) => (
-                  <button key={f.name+i} onClick={() => { setDetectedFoods([f]); setSelectedFoodIdx(0); setSearchResults([]); }}
-                    style={{ display:'flex', alignItems:'center', gap:12, padding:'clamp(10px,2.5vw,14px) clamp(12px,3vw,16px)', background:T.white, borderRadius:14, boxShadow:T.shadow, textAlign:'left', width:'100%', border:'1.5px solid transparent' }}>
-                    <span style={{ fontSize:'clamp(24px,6vw,30px)' }}>{f.icon}</span>
-                    <div style={{ flex:1 }}>
-                      <div style={{ color:T.text, fontSize:'clamp(13px,3.2vw,14px)', fontWeight:600 }}>{f.name}</div>
-                      <div style={{ color:T.textTer, fontSize:'clamp(10px,2.4vw,11px)' }}>pour {f.per}</div>
-                    </div>
-                    <div style={{ textAlign:'right' }}>
-                      <div style={{ color:T.accent, fontSize:'clamp(14px,3.5vw,16px)', fontWeight:700 }}>{f.cal}</div>
-                      <div style={{ color:T.textTer, fontSize:10 }}>kcal</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
+              {/* AI Analyze button */}
+              {manualInput.length >= 2 && !analyzing && detectedFoods.length === 0 && (
+                <button onClick={() => analyzeText(manualInput)} style={{
+                  width:'100%', padding:'12px 0', background:'linear-gradient(135deg, #3B82F6, #8B5CF6)',
+                  borderRadius:12, color:'#fff', fontSize:14, fontWeight:700, marginBottom:12,
+                  boxShadow:'0 2px 12px rgba(59,130,246,0.3)', display:'flex', alignItems:'center', justifyContent:'center', gap:8
+                }}>
+                  🤖 Analyser par IA : "{manualInput.length > 30 ? manualInput.slice(0,30)+'...' : manualInput}"
+                </button>
+              )}
 
-              {detectedFoods.length > 0 && selectedFoodIdx !== null && (
-                <div style={{ background:T.white, borderRadius:18, padding:20, border:`1.5px solid ${T.accent}33`, boxShadow:T.shadowLg, marginTop:12 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:14 }}>
-                    <span style={{ fontSize:36 }}>{detectedFoods[selectedFoodIdx].icon}</span>
-                    <div>
-                      <div style={{ color:T.accent, fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:1 }}>Sélectionné</div>
-                      <div style={{ color:T.text, fontSize:20, fontWeight:700, marginTop:2 }}>{detectedFoods[selectedFoodIdx].name}</div>
-                    </div>
-                  </div>
-                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
-                    <span style={{ color:T.textSec, fontSize:12 }}>Quantité (g):</span>
-                    <input value={manualGrams} onChange={e => setManualGrams(e.target.value)} type="number"
-                      style={{ flex:1, padding:'8px 12px', background:T.bg, border:`1px solid ${T.border}`, borderRadius:8, color:T.text, fontSize:14, outline:'none' }}/>
-                  </div>
-                  <button onClick={() => { addFoodFromDB(detectedFoods[selectedFoodIdx], parseInt(manualGrams)||100); resetScanner(); }}
-                    style={{ width:'100%', padding:'12px 0', background:T.accent, borderRadius:12, color:'#fff', fontSize:13, fontWeight:700, boxShadow:'0 2px 10px rgba(59,130,246,0.3)' }}>
-                    ✓ Ajouter au {MEALS.find(m=>m.id===selectedMealType)?.label}
-                  </button>
+              {/* Analyzing spinner */}
+              {analyzing && (
+                <div style={{ textAlign:'center', padding:32 }}>
+                  <div style={{ fontSize:44, animation:'spin 1.2s linear infinite', display:'inline-block' }}>🤖</div>
+                  <p style={{ color:T.accent, fontSize:14, fontWeight:600, marginTop:12 }}>L'IA analyse "{manualInput.length > 25 ? manualInput.slice(0,25)+'...' : manualInput}"</p>
                 </div>
               )}
 
-              {manualInput.length >= 2 && searchResults.length === 0 && detectedFoods.length === 0 && (
-                <div style={{ textAlign:'center', padding:32, color:T.textTer }}>
-                  <div style={{ fontSize:36, marginBottom:8 }}>🤷</div>
-                  <p style={{ fontSize:13 }}>Aucun résultat pour "{manualInput}"</p>
-                  <p style={{ fontSize:11, marginTop:4 }}>Essaie le mode Photo IA pour analyser l'aliment</p>
+              {/* Error */}
+              {analyzeError && !analyzing && (
+                <div style={{ background:T.redLight, borderRadius:14, padding:16, marginBottom:12, textAlign:'center' }}>
+                  <p style={{ color:T.red, fontSize:13, fontWeight:600, marginBottom:8 }}>{analyzeError}</p>
+                  <button onClick={() => { setAnalyzeError(''); }} style={{ padding:'8px 20px', background:T.accent, borderRadius:10, color:'#fff', fontSize:12, fontWeight:600 }}>OK</button>
+                </div>
+              )}
+
+              {/* Local DB quick results */}
+              {searchResults.length > 0 && detectedFoods.length === 0 && !analyzing && (
+                <>
+                  <div style={{ fontSize:11, color:T.textTer, fontWeight:600, textTransform:'uppercase', letterSpacing:.5, marginBottom:6, paddingLeft:4 }}>Résultats rapides</div>
+                  <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:12 }}>
+                    {searchResults.map((f, i) => (
+                      <button key={f.name+i} onClick={() => { setDetectedFoods([f]); setSelectedFoodIdx(0); setSearchResults([]); }}
+                        style={{ display:'flex', alignItems:'center', gap:12, padding:'clamp(10px,2.5vw,14px) clamp(12px,3vw,16px)', background:T.white, borderRadius:14, boxShadow:T.shadow, textAlign:'left', width:'100%', border:'1.5px solid transparent' }}>
+                        <span style={{ fontSize:'clamp(24px,6vw,30px)' }}>{f.icon}</span>
+                        <div style={{ flex:1 }}>
+                          <div style={{ color:T.text, fontSize:'clamp(13px,3.2vw,14px)', fontWeight:600 }}>{f.name}</div>
+                          <div style={{ color:T.textTer, fontSize:'clamp(10px,2.4vw,11px)' }}>pour {f.per}</div>
+                        </div>
+                        <div style={{ textAlign:'right' }}>
+                          <div style={{ color:T.accent, fontSize:'clamp(14px,3.5vw,16px)', fontWeight:700 }}>{f.cal}</div>
+                          <div style={{ color:T.textTer, fontSize:10 }}>kcal</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {/* AI detected foods */}
+              {detectedFoods.length > 0 && !analyzing && (
+                <div>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+                    <h3 style={{ fontSize:14, fontWeight:700, color:T.text }}>
+                      🤖 {detectedFoods.length} aliment{detectedFoods.length>1?'s':''} identifié{detectedFoods.length>1?'s':''}
+                    </h3>
+                    {detectedFoods.length > 1 && (
+                      <button onClick={() => { detectedFoods.forEach(f => addFood(f)); resetScanner(); }} style={{ padding:'8px 14px', background:T.accent, borderRadius:10, color:'#fff', fontSize:11, fontWeight:600, boxShadow:'0 2px 8px rgba(59,130,246,0.3)' }}>Tout ajouter</button>
+                    )}
+                  </div>
+                  {detectedFoods.map((f, i) => (
+                    <div key={i} style={{ background:T.white, borderRadius:16, padding:14, marginBottom:8, border: selectedFoodIdx===i ? `2px solid ${T.accent}` : `1px solid ${T.border}`, boxShadow: selectedFoodIdx===i ? '0 2px 12px rgba(59,130,246,0.15)' : T.shadow, transition:'all .2s' }}
+                      onClick={() => setSelectedFoodIdx(selectedFoodIdx===i ? null : i)}>
+                      <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                        <span style={{ fontSize:30 }}>{f.icon}</span>
+                        <div style={{ flex:1 }}>
+                          <div style={{ color:T.text, fontSize:14, fontWeight:600 }}>{f.name}</div>
+                          <div style={{ color:T.textTer, fontSize:11 }}>{f.grams}g · P:{f.protein}g · G:{f.carbs}g · L:{f.fat}g</div>
+                        </div>
+                        <div style={{ textAlign:'right' }}>
+                          <div style={{ color:T.accent, fontSize:16, fontWeight:700 }}>{f.cal}</div>
+                          <div style={{ color:T.textTer, fontSize:10 }}>kcal</div>
+                        </div>
+                      </div>
+                      {selectedFoodIdx===i && (
+                        <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid ${T.border}` }}>
+                          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:6, marginBottom:10 }}>
+                            {[{l:'Cal',v:f.cal,u:'',c:T.accent},{l:'Prot',v:f.protein,u:'g',c:T.green},{l:'Gluc',v:f.carbs,u:'g',c:T.orange},{l:'Lip',v:f.fat,u:'g',c:T.red}].map(x=>(
+                              <div key={x.l} style={{ background:T.bg, borderRadius:8, padding:8, textAlign:'center' }}>
+                                <div style={{ fontSize:9, color:T.textTer, textTransform:'uppercase' }}>{x.l}</div>
+                                <div style={{ fontSize:14, fontWeight:700, color:x.c, marginTop:2 }}>{x.v}{x.u}</div>
+                              </div>
+                            ))}
+                          </div>
+                          <button onClick={(e) => { e.stopPropagation(); addFood(f); resetScanner(); }} style={{ width:'100%', padding:'10px 0', background:T.accent, borderRadius:10, color:'#fff', fontSize:13, fontWeight:700 }}>
+                            ✓ Ajouter au {MEALS.find(m=>m.id===selectedMealType)?.label}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {manualInput.length >= 2 && searchResults.length === 0 && detectedFoods.length === 0 && !analyzing && !analyzeError && (
+                <div style={{ textAlign:'center', padding:24, color:T.textTer }}>
+                  <p style={{ fontSize:12, lineHeight:1.5 }}>Tape ton repas et appuie sur <b style={{color:T.accent}}>Analyser par IA</b><br/>ou appuie <b>Entrée</b> sur ton clavier</p>
                 </div>
               )}
             </>}
