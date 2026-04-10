@@ -332,33 +332,37 @@ export default function App() {
 
               {detectedFoods.length > 0 && (
                 <div>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-                    <h3 style={{ fontSize:15, fontWeight:700 }}>{detectedFoods.length} aliment{detectedFoods.length>1?'s':''} détecté{detectedFoods.length>1?'s':''}</h3>
-                    {detectedFoods.length > 1 && (
-                      <button onClick={() => { detectedFoods.forEach(f => addFood(f)); resetScanner(); }} style={{ padding:'8px 16px', background:T.accent, borderRadius:10, color:'#fff', fontSize:12, fontWeight:600, boxShadow:'0 2px 8px rgba(59,130,246,0.3)' }}>Tout ajouter</button>
-                    )}
-                  </div>
+                  <h3 style={{ fontSize:15, fontWeight:700, marginBottom:10 }}>{detectedFoods.length} aliment{detectedFoods.length>1?'s':''} détecté{detectedFoods.length>1?'s':''}</h3>
+
+                  {/* BIG ADD ALL BUTTON */}
+                  <button onClick={() => { detectedFoods.forEach(f => addFood(f)); resetScanner(); }} style={{
+                    width:'100%', padding:'14px 0', background:'linear-gradient(135deg, #3B82F6, #2563EB)',
+                    borderRadius:14, color:'#fff', fontSize:15, fontWeight:700, marginBottom:12,
+                    boxShadow:'0 4px 16px rgba(59,130,246,0.35)', display:'flex', alignItems:'center', justifyContent:'center', gap:8
+                  }}>
+                    ✓ Tout ajouter au {MEALS.find(m=>m.id===selectedMealType)?.label} ({detectedFoods.reduce((s,f)=>s+f.cal,0)} kcal)
+                  </button>
+
                   {detectedFoods.map((f, i) => (
-                    <div key={i} style={{ background:T.white, borderRadius:16, padding:14, marginBottom:8, border: selectedFoodIdx===i ? `2px solid ${T.accent}` : `1px solid ${T.border}`, boxShadow: selectedFoodIdx===i ? '0 2px 12px rgba(59,130,246,0.15)' : T.shadow, transition:'all .2s' }}
-                      onClick={() => setSelectedFoodIdx(selectedFoodIdx===i ? null : i)}>
+                    <div key={i} style={{ background:T.white, borderRadius:16, padding:14, marginBottom:8, border:`1px solid ${T.border}`, boxShadow:T.shadow }}>
                       <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-                        <span style={{ fontSize:30 }}>{f.icon}</span>
+                        <span style={{ fontSize:28 }}>{f.icon}</span>
                         <div style={{ flex:1 }}>
                           <div style={{ color:T.text, fontSize:14, fontWeight:600 }}>{f.name}</div>
                           <div style={{ color:T.textTer, fontSize:11 }}>{f.grams}g · P:{f.protein}g · G:{f.carbs}g · L:{f.fat}g</div>
                         </div>
-                        <div style={{ textAlign:'right' }}>
-                          <div style={{ color:T.accent, fontSize:16, fontWeight:700 }}>{f.cal}</div>
+                        <div style={{ textAlign:'right', marginRight:8 }}>
+                          <div style={{ color:T.accent, fontSize:15, fontWeight:700 }}>{f.cal}</div>
                           <div style={{ color:T.textTer, fontSize:10 }}>kcal</div>
                         </div>
-                      </div>
-                      {selectedFoodIdx===i && (
-                        <button onClick={(e) => { e.stopPropagation(); addFood(f); resetScanner(); }} style={{ width:'100%', padding:'10px 0', background:T.accent, borderRadius:10, color:'#fff', fontSize:13, fontWeight:700, marginTop:10 }}>
-                          ✓ Ajouter au {MEALS.find(m=>m.id===selectedMealType)?.label}
+                        <button onClick={(e) => { e.stopPropagation(); addFood(f); setDetectedFoods(prev => prev.filter((_,idx) => idx !== i)); }}
+                          style={{ padding:'6px 12px', background:T.greenLight, borderRadius:8, color:T.green, fontSize:11, fontWeight:700, border:`1px solid ${T.green}44`, whiteSpace:'nowrap' }}>
+                          + Ajouter
                         </button>
-                      )}
+                      </div>
                     </div>
                   ))}
+
                   <button onClick={() => { setDetectedFoods([]); setSelectedFoodIdx(null); startCamera(); }} style={{ width:'100%', padding:'12px 0', background:T.white, border:`1px solid ${T.border}`, borderRadius:12, color:T.textSec, fontSize:13, fontWeight:600, marginTop:8 }}>📷 Reprendre une photo</button>
                 </div>
               )}
@@ -435,43 +439,36 @@ export default function App() {
               {/* AI detected foods */}
               {detectedFoods.length > 0 && !analyzing && (
                 <div>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-                    <h3 style={{ fontSize:14, fontWeight:700, color:T.text }}>
-                      🤖 {detectedFoods.length} aliment{detectedFoods.length>1?'s':''} identifié{detectedFoods.length>1?'s':''}
-                    </h3>
-                    {detectedFoods.length > 1 && (
-                      <button onClick={() => { detectedFoods.forEach(f => addFood(f)); resetScanner(); }} style={{ padding:'8px 14px', background:T.accent, borderRadius:10, color:'#fff', fontSize:11, fontWeight:600, boxShadow:'0 2px 8px rgba(59,130,246,0.3)' }}>Tout ajouter</button>
-                    )}
-                  </div>
+                  <h3 style={{ fontSize:14, fontWeight:700, color:T.text, marginBottom:10 }}>
+                    🤖 {detectedFoods.length} aliment{detectedFoods.length>1?'s':''} identifié{detectedFoods.length>1?'s':''}
+                  </h3>
+
+                  {/* BIG ADD ALL BUTTON */}
+                  <button onClick={() => { detectedFoods.forEach(f => addFood(f)); resetScanner(); }} style={{
+                    width:'100%', padding:'14px 0', background:'linear-gradient(135deg, #3B82F6, #2563EB)',
+                    borderRadius:14, color:'#fff', fontSize:15, fontWeight:700, marginBottom:12,
+                    boxShadow:'0 4px 16px rgba(59,130,246,0.35)', display:'flex', alignItems:'center', justifyContent:'center', gap:8
+                  }}>
+                    ✓ Tout ajouter au {MEALS.find(m=>m.id===selectedMealType)?.label} ({detectedFoods.reduce((s,f)=>s+f.cal,0)} kcal)
+                  </button>
+
                   {detectedFoods.map((f, i) => (
-                    <div key={i} style={{ background:T.white, borderRadius:16, padding:14, marginBottom:8, border: selectedFoodIdx===i ? `2px solid ${T.accent}` : `1px solid ${T.border}`, boxShadow: selectedFoodIdx===i ? '0 2px 12px rgba(59,130,246,0.15)' : T.shadow, transition:'all .2s' }}
-                      onClick={() => setSelectedFoodIdx(selectedFoodIdx===i ? null : i)}>
+                    <div key={i} style={{ background:T.white, borderRadius:16, padding:14, marginBottom:8, border:`1px solid ${T.border}`, boxShadow:T.shadow }}>
                       <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-                        <span style={{ fontSize:30 }}>{f.icon}</span>
+                        <span style={{ fontSize:28 }}>{f.icon}</span>
                         <div style={{ flex:1 }}>
                           <div style={{ color:T.text, fontSize:14, fontWeight:600 }}>{f.name}</div>
                           <div style={{ color:T.textTer, fontSize:11 }}>{f.grams}g · P:{f.protein}g · G:{f.carbs}g · L:{f.fat}g</div>
                         </div>
-                        <div style={{ textAlign:'right' }}>
-                          <div style={{ color:T.accent, fontSize:16, fontWeight:700 }}>{f.cal}</div>
+                        <div style={{ textAlign:'right', marginRight:8 }}>
+                          <div style={{ color:T.accent, fontSize:15, fontWeight:700 }}>{f.cal}</div>
                           <div style={{ color:T.textTer, fontSize:10 }}>kcal</div>
                         </div>
+                        <button onClick={(e) => { e.stopPropagation(); addFood(f); setDetectedFoods(prev => prev.filter((_,idx) => idx !== i)); }}
+                          style={{ padding:'6px 12px', background:T.greenLight, borderRadius:8, color:T.green, fontSize:11, fontWeight:700, border:`1px solid ${T.green}44`, whiteSpace:'nowrap' }}>
+                          + Ajouter
+                        </button>
                       </div>
-                      {selectedFoodIdx===i && (
-                        <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid ${T.border}` }}>
-                          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:6, marginBottom:10 }}>
-                            {[{l:'Cal',v:f.cal,u:'',c:T.accent},{l:'Prot',v:f.protein,u:'g',c:T.green},{l:'Gluc',v:f.carbs,u:'g',c:T.orange},{l:'Lip',v:f.fat,u:'g',c:T.red}].map(x=>(
-                              <div key={x.l} style={{ background:T.bg, borderRadius:8, padding:8, textAlign:'center' }}>
-                                <div style={{ fontSize:9, color:T.textTer, textTransform:'uppercase' }}>{x.l}</div>
-                                <div style={{ fontSize:14, fontWeight:700, color:x.c, marginTop:2 }}>{x.v}{x.u}</div>
-                              </div>
-                            ))}
-                          </div>
-                          <button onClick={(e) => { e.stopPropagation(); addFood(f); resetScanner(); }} style={{ width:'100%', padding:'10px 0', background:T.accent, borderRadius:10, color:'#fff', fontSize:13, fontWeight:700 }}>
-                            ✓ Ajouter au {MEALS.find(m=>m.id===selectedMealType)?.label}
-                          </button>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
