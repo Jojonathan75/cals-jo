@@ -173,36 +173,75 @@ export default function App() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { setVoiceError("Reconnaissance vocale non supportée. Utilise Chrome."); return; }
     const recognition = new SR();
-    recognition.lang = 'fr-FR'; recognition.continuous = false; recognition.interimResults = true;
+    recognition.lang = 'fr-FR';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
     recognitionRef.current = recognition;
     setIsListening(true);
 
+    let finalTranscript = '';
+    let silenceTimer = null;
+
     recognition.onresult = (event) => {
-      const transcript = Array.from(event.results).map(r => r[0].transcript).join('');
-      setVoiceText(transcript);
-      if (event.results[0].isFinal) {
-        setIsListening(false);
-        setManualInput(transcript);
-        // Use AI to analyze the spoken text
-        setScanMode('manual');
-        setTimeout(() => analyzeText(transcript), 100);
+      let interim = '';
+      finalTranscript = '';
+      for (let i = 0; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript + ' ';
+        } else {
+          interim += event.results[i][0].transcript;
+        }
       }
+      setVoiceText(finalTranscript + interim);
+
+      // Reset silence timer - wait 3 seconds of silence before stopping
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(() => {
+        recognition.stop();
+      }, 3000);
     };
+
     recognition.onerror = (e) => {
       setIsListening(false);
+      clearTimeout(silenceTimer);
       if (e.error === 'no-speech') setVoiceError("Aucune voix détectée. Parle plus fort.");
       else if (e.error === 'not-allowed') setVoiceError("Micro refusé. Autorise le micro dans les paramètres.");
-      else setVoiceError("Erreur. Réessaie.");
+      else if (e.error !== 'aborted') setVoiceError("Erreur. Réessaie.");
     };
-    recognition.onend = () => setIsListening(false);
+
+    recognition.onend = () => {
+      setIsListening(false);
+      clearTimeout(silenceTimer);
+      const text = finalTranscript.trim();
+      if (text.length > 0) {
+        setManualInput(text);
+        setScanMode('manual');
+        setTimeout(() => analyzeText(text), 100);
+      }
+    };
+
     try { recognition.start(); } catch { setIsListening(false); setVoiceError("Impossible de démarrer le micro."); }
   };
 
   // Add food
   const addFood = (food) => {
     const entry = { ...food, id: Date.now() + Math.random() };
-    const current = getMeals(selectedDate);
-    setAllData(p => ({ ...p, [dateKey(selectedDate)]: { ...current, [selectedMealType]: [...current[selectedMealType], entry] } }));
+    setAllData(p => {
+      const k = dateKey(selectedDate);
+      const current = p[k] || emptyDay();
+      return { ...p, [k]: { ...current, [selectedMealType]: [...current[selectedMealType], entry] } };
+    });
+  };
+
+  // Add multiple foods at once
+  const addMultipleFoods = (foods) => {
+    setAllData(p => {
+      const k = dateKey(selectedDate);
+      const current = p[k] || emptyDay();
+      const entries = foods.map(f => ({ ...f, id: Date.now() + Math.random() }));
+      return { ...p, [k]: { ...current, [selectedMealType]: [...current[selectedMealType], ...entries] } };
+    });
   };
 
   const addFoodFromDB = (food, grams) => {
@@ -211,8 +250,11 @@ export default function App() {
   };
 
   const removeFood = (mealId, foodId) => {
-    const current = getMeals(selectedDate);
-    setAllData(p => ({ ...p, [dateKey(selectedDate)]: { ...current, [mealId]: current[mealId].filter(f => f.id !== foodId) } }));
+    setAllData(p => {
+      const k = dateKey(selectedDate);
+      const current = p[k] || emptyDay();
+      return { ...p, [k]: { ...current, [mealId]: current[mealId].filter(f => f.id !== foodId) } };
+    });
   };
 
   const resetScanner = () => {
@@ -335,7 +377,7 @@ export default function App() {
                   <h3 style={{ fontSize:15, fontWeight:700, marginBottom:10 }}>{detectedFoods.length} aliment{detectedFoods.length>1?'s':''} détecté{detectedFoods.length>1?'s':''}</h3>
 
                   {/* BIG ADD ALL BUTTON */}
-                  <button onClick={() => { detectedFoods.forEach(f => addFood(f)); resetScanner(); }} style={{
+                  <button onClick={() => { addMultipleFoods(detectedFoods); resetScanner(); }} style={{
                     width:'100%', padding:'14px 0', background:'linear-gradient(135deg, #3B82F6, #2563EB)',
                     borderRadius:14, color:'#fff', fontSize:15, fontWeight:700, marginBottom:12,
                     boxShadow:'0 4px 16px rgba(59,130,246,0.35)', display:'flex', alignItems:'center', justifyContent:'center', gap:8
@@ -444,7 +486,7 @@ export default function App() {
                   </h3>
 
                   {/* BIG ADD ALL BUTTON */}
-                  <button onClick={() => { detectedFoods.forEach(f => addFood(f)); resetScanner(); }} style={{
+                  <button onClick={() => { addMultipleFoods(detectedFoods); resetScanner(); }} style={{
                     width:'100%', padding:'14px 0', background:'linear-gradient(135deg, #3B82F6, #2563EB)',
                     borderRadius:14, color:'#fff', fontSize:15, fontWeight:700, marginBottom:12,
                     boxShadow:'0 4px 16px rgba(59,130,246,0.35)', display:'flex', alignItems:'center', justifyContent:'center', gap:8
@@ -489,14 +531,14 @@ export default function App() {
                     <div style={{ width:72, height:72, borderRadius:'50%', background:T.accent, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:30 }}>🎙️</div>
                   </div>
                   <p style={{ color:T.accent, fontSize:18, fontWeight:600, marginBottom:4 }}>Écoute en cours...</p>
-                  {voiceText && <p style={{ color:T.text, fontSize:15, fontWeight:500, marginTop:8, background:T.white, padding:'10px 16px', borderRadius:10, display:'inline-block' }}>"{voiceText}"</p>}
-                  <p style={{ color:T.textTer, fontSize:12, marginTop:12 }}>Dis juste le nom de l'aliment<br/>(ex: "poulet", "riz", "banane")</p>
-                  <button onClick={() => { if(recognitionRef.current) recognitionRef.current.stop(); setIsListening(false); }}
-                    style={{ marginTop:16, padding:'10px 24px', background:T.red, borderRadius:10, color:'#fff', fontSize:13, fontWeight:600 }}>Arrêter</button>
+                  {voiceText && <p style={{ color:T.text, fontSize:15, fontWeight:500, marginTop:8, background:T.white, padding:'10px 16px', borderRadius:10, display:'inline-block', maxWidth:'90%' }}>"{voiceText}"</p>}
+                  <p style={{ color:T.textTer, fontSize:12, marginTop:12 }}>Décris tous tes aliments, prends ton temps<br/>Le micro se coupe 3s après ta dernière parole</p>
+                  <button onClick={() => { if(recognitionRef.current) recognitionRef.current.stop(); }}
+                    style={{ marginTop:16, padding:'10px 24px', background:T.green, borderRadius:10, color:'#fff', fontSize:13, fontWeight:600 }}>✓ Terminé</button>
                 </> : <>
                   <div style={{ fontSize:56, marginBottom:16 }}>🎙️</div>
                   <p style={{ color:T.text, fontSize:17, fontWeight:600, marginBottom:6 }}>Entrée vocale</p>
-                  <p style={{ color:T.textTer, fontSize:13, marginBottom:24, lineHeight:1.6 }}>Appuie sur le micro et dis<br/>le nom de ton aliment<br/><b>(un seul mot : "poulet", "riz"...)</b></p>
+                  <p style={{ color:T.textTer, fontSize:13, marginBottom:24, lineHeight:1.6 }}>Appuie sur le micro et décris<br/>tout ce que tu as mangé<br/><b>(ex: "du riz avec du poulet et une banane")</b></p>
                   {voiceError && <div style={{ background:T.redLight, borderRadius:12, padding:12, marginBottom:16 }}><p style={{ color:T.red, fontSize:12 }}>{voiceError}</p></div>}
                   {voiceText && !voiceError && <p style={{ color:T.accent, fontSize:14, marginBottom:16, background:T.accentLight, padding:'8px 16px', borderRadius:10, display:'inline-block' }}>Dernier : « {voiceText} »</p>}
                   <div><button onClick={startVoice} style={{ width:80, height:80, borderRadius:'50%', background:T.accent, fontSize:32, color:'#fff', boxShadow:'0 4px 24px rgba(59,130,246,0.4)' }}>🎙️</button></div>
